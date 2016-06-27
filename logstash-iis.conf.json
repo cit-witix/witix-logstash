@@ -1,0 +1,47 @@
+# logstash config file for IIS access loging configuration, to install and configure the logstash use the following reference: https://www.elastic.co/guide/en/logstash/2.3/installing-logstash.html
+
+# Inform your logging file path. You can use wildcard in the file 
+input {
+ file {
+    #type => "iis"
+    path => "/path/to/my/log_file*.log"
+    start_position => "beginning" 
+  }
+}
+
+filter {
+ 
+  #ignore log comments
+  if [message] =~ "^#" {
+    drop {}
+  }
+
+  # check that fields match your IIS log settings
+  grok {
+    match => ["message", "%{TIMESTAMP_ISO8601:log_timestamp} %{IPORHOST:site} %{WORD:method} %{URIPATH:page} %{NOTSPACE:querystring} %{NUMBER:port:int} %{NOTSPACE:username} %{IPORHOST:clienthost} %{NOTSPACE:useragent} %{NUMBER:response} %{NUMBER:subresponse} %{NUMBER:scstatus:int} %{NUMBER:time_taken:int}"]
+  }
+  
+  #Set the Event Timesteamp from the log
+	date {
+    match => [ "log_timestamp", "YYYY-MM-dd HH:mm:ss" ]
+	  timezone => "Etc/UTC"
+  }	
+	
+  useragent {
+  	source=> "useragent"
+  	prefix=> "browser"
+  }
+	
+  mutate {
+	 remove_field => [ "log_timestamp"]
+  }
+}
+
+# See documentation for different protocols in the logstash documentation
+output {
+  stdout { codec => rubydebug }
+  elasticsearch {
+     hosts => "elastic_server"
+	   index => "logstash-iis-%{+YYYY.MM.dd}"
+  }
+}
